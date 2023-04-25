@@ -1,0 +1,171 @@
+---
+title: "Military Surplus Data Viz"
+output: html_notebook
+---
+
+## Setup
+
+```{r setup}
+library(tidyverse)
+library(lubridate)
+library(scales)
+```
+
+## Import the leso data
+
+```{r import}
+leso <- read_csv("data-raw/leso.csv")
+
+leso |> glimpse()
+```
+
+
+## Prepare data for visualization
+
+Need to do two things here:
+
+- Remove unnecessary columns using select()
+- Create a total_value column using mutate()
+
+```{r clean}
+leso_total <- leso |>
+  select(
+    -sheet,
+    -nsn,
+    -starts_with("demil")
+  ) |> 
+  mutate(total_value = quantity * acquisition_value)
+
+leso_total |> glimpse()
+```
+
+## Wrangle the data
+
+Goals here:
+
+- Filter the data to focus on more recent data. Consider military surplus in 2010 and after.
+- Create a year variable using the `year()` function.
+- Select a few variables to study (specifically, year, total_value, and state)
+- Save all that into a new data frame called leso_dated
+
+```{r all-states}
+leso_dated <- leso_total |> 
+  filter(ship_date >= "2010-01-01") |> 
+  mutate(year = year(ship_date)) |> 
+  select(year, total_value, state)
+
+leso_dated |> glimpse()
+```
+
+```{r texas}
+leso_tx_dated <- leso_total |> 
+  filter(state == "TX", ship_date >= "2010-01-01") |> 
+  mutate(year = year(ship_date)) |> 
+  select(year, total_value, state)
+
+leso_tx_dated |> glimpse()
+```
+
+
+## Get total values by year
+
+Group by year, add up total values and arrange in chronological order
+
+```{r tx-totals}
+leso_tx_total <- leso_tx_dated |> 
+  group_by(year) |> 
+  summarise(total_yearly_value = sum(total_value)) |> 
+  mutate(total_yearly_value = total_yearly_value/1000000) |> # divide by million to get around notation
+  arrange(year)
+
+leso_tx_total
+```
+
+
+## Create a line chart for Texas data
+
+```{r line-plot}
+tx_plot <- ggplot(leso_tx_total, aes(x = year, y = total_yearly_value)) +
+  geom_point() +
+  geom_line() +
+  labs(
+    title = "Yearly value of military surplus acquisitions in Texas",
+    caption = "Source: Law Enforcement Support Office",
+    x = "",
+    y = "Cost of acquisitions (in millions)"
+  ) +
+  scale_x_continuous(breaks = seq(from = 2010, to = 2022, by = 2)) +
+  theme(plot.title.position = "plot")
+
+tx_plot
+```
+
+
+## Prepare data for neighboring states comparison
+
+Want to see how Texas' military surplus info compares to that of neighboring states. Need to group by state AND year.
+
+```{r}
+leso_five <- leso_dated |> 
+  filter(
+    state %in% c("TX", "OK", "AR", "NM", "LA")
+  ) |> 
+  group_by(state, year) |> 
+  summarise(total_yearly_value = sum(total_value)) |> 
+  mutate(total_yearly_value = total_yearly_value/1000000)
+
+leso_five |> glimpse()
+```
+
+
+## Plot multiple line chart
+
+```{r multiple-line-chart}
+five_plot <- ggplot(leso_five, aes(x = year, y = total_yearly_value)) +
+  geom_point(aes(color = state)) +
+  geom_line(aes(color = state)) + # the aes selects a color for each state
+  labs(
+    title = "Yearly Value of Military Surplus Acquisitions in Texas and Neighboring States",
+    caption = "Chart: Cecilia Garzella • Source: Law Enforcement Support Office",
+    x = "",
+    y = "Cost of acquisitions (in millions)"
+  ) +
+  scale_x_continuous(breaks = seq(from = 2010, to = 2022, by = 2)) +
+  theme(plot.title.position = "plot")
+  #theme_minimal()
+
+five_plot
+```
+
+
+## Facet wrap
+
+```{r facet-wrap}
+facet_wrap_five <- five_plot +
+  facet_wrap(~ state, nrow = 2) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + #rotates angle of x-axis ticks
+  theme(panel.spacing.x = unit(1, "lines")) + # increases horizontal space between faceted plots
+  theme(legend.position = "none") # this line removes the legend
+
+facet_wrap_five
+```
+
+
+
+## Interactive plot
+
+```{r interactive}
+library(plotly)
+
+tx_plot |> 
+  ggplotly()
+```
+
+
+## Save plot
+
+```{r}
+ggsave("images/multiple-line-five.png", plot = five_plot)
+```
+
+
