@@ -1,0 +1,137 @@
+---
+title: "Military Surplus Import & Clean"
+output: html_notebook
+---
+
+
+## Goals of This Notebook
+
+- Download the data
+- Import the data
+- Check datatypes
+- Create a total_value variable
+- Create a control_type variable
+- Filter to Texas agencies
+- Filter the date range (since Jan. 1 2010)
+- Export the cleaned data
+
+
+## Setup
+
+janitor is not necessary here because data already has clean names
+
+```{r setup}
+library(tidyverse)
+library(DT)
+```
+
+## Download the Data
+
+While the data I will use here is from Professor Christian McDonald, it is originally from the [Law Enforcement Support Office](https://www.dla.mil/DispositionServices/Offers/Reutilization/LawEnforcement/PublicInformation/). Find more information [about the program here](https://www.dla.mil/DispositionServices/Offers/Reutilization/LawEnforcement/ProgramFAQs/).
+
+
+Comment out line once downloaded, so that it doesn't keep running.
+
+
+```{r download}
+#download.file("https://raw.githubusercontent.com/utdata/rwdir/main/data-raw/leso.csv", "data-raw/leso.csv")
+```
+
+
+## Import data
+
+
+```{r import}
+leso <- read_csv("data-raw/leso.csv")
+
+leso
+```
+# Glimpse the data
+
+
+```{r glimpse}
+leso |> 
+  glimpse()
+```
+
+
+## Remove unnecessary columms
+
+
+```{r remove-columns}
+leso_tight <- leso |> 
+  select(-sheet)
+
+leso_tight |> glimpse()
+```
+
+
+## Create total value column
+
+Data only has acquisition value, which is cost per unit. Need to multiply acquisition value by quantity and create new total column. 
+
+```{r total-value}
+leso_total <- leso_tight |> 
+  mutate(total_value = acquisition_value * quantity)
+
+leso_total |> glimpse()
+```
+
+## Controlled vs. non-controlled columns & categorization logic
+
+Need to separate the controlled vs. non-controlled items and can do this by whether or not it's an airplane or by its code. 
+
+Goals: 
+
+- Create a new column to denote if the item is controlled.
+- In that column, needs to be TRUE when an item is controlled and FALSE when it is not.
+- Items with “AIRPLANE” are always controlled, no matter their demil designations.
+- Otherwise, items that have a demil_code of “A”, OR a demil_code of “Q” AND a demil_id of “6”, are non-controlled.
+- Everything else is controlled.
+
+```{r controlled}
+leso_control <- leso_total |> 
+  mutate(
+    control_type = case_when(
+      str_detect(item_name, "AIRPLANE") ~ TRUE, (demil_code == "A" | (demil_code == "Q" & demil_ic == 6)) ~ FALSE, TRUE ~ TRUE
+    )
+  )
+
+leso_control |> glimpse()
+```
+
+# Confirm whether tests worked
+
+```{r control-test}
+leso_control |> 
+  select(item_name, demil_code, demil_ic, control_type) |> 
+  filter(str_detect(item_name, "AIRPLANE"))
+```
+
+```{r}
+leso_control |> 
+  count(demil_code, demil_ic, control_type, name = "cnt") |> 
+  pivot_wider(names_from = control_type, values_from = cnt) |> 
+  DT::datatable()
+```
+
+
+## Finally, filter the data
+
+Filter the data to get only Texas observations of a certain date range. 
+
+```{r filter}
+leso_filtered <- leso_control |> 
+  filter(state == "TX", ship_date >= "2010-01-01")
+
+leso_filtered |> summary()
+```
+
+
+## Export the cleaned data
+
+
+```{r export}
+leso_filtered |> write_rds("data-processed/01-leso-tx.rds")
+```
+
