@@ -1,0 +1,153 @@
+---
+title: "Military Surplus Analysis"
+output: html_notebook
+---
+
+## Goals and Questions to Answer
+
+All answers should be based on data about Texas agencies from Jan. 1, 2010 to present. All of these questions are for the “controlled” items, only.
+
+- How many total “controlled” items were transferred, and what are they all worth? Summarize all the controlled items only to get the total quantity and total value of everything.
+- How many total “controlled” items did each agency get and how much was it all worth? Which agency got the most stuff?
+- How about local agencies? 
+- What specific “controlled” items did each agency get and how much were they worth? Look at the kinds of items.
+- What did local agencies get?
+
+
+## Setup
+
+```{r setup}
+library(tidyverse)
+```
+
+
+## Import Cleaned Data
+
+```{r import}
+tx <- read_rds("data-processed/01-leso-tx.rds")
+
+tx |> glimpse()
+```
+
+
+## Filter for only controlled items
+
+```{r control-filter}
+tx_c <- tx |> 
+  filter(control_type == TRUE)
+
+tx_c |> glimpse()
+```
+
+
+## Building summaries with math
+
+Looking for how many total controlled items were transferred and what the total value was across the board.
+
+```{r totals}
+tx_c |> 
+  summarise(
+    summed_quantity = sum(quantity),
+    summed_total_value = sum(total_value)
+  )
+```
+
+
+## Totals by agency
+
+For each agency, how many things did they get and how much was it all worth?
+
+```{r agency-totals}
+# save the pre-existing "by agency" list into a new object for future use.
+tx_agency_totals <- tx_c |> 
+  group_by(agency_name) |> 
+  summarise(
+    summed_quanity = sum(quantity),
+    summed_total_value = sum(total_value)
+  ) |> 
+  arrange(desc(summed_total_value))
+
+# peek at result
+tx_agency_totals
+```
+
+## Filter for local agencies
+
+Create a vector (or list) of the local agencies and save that into an R object for convenience. Then use the `%in%` operator to filter within a vector.
+
+```{r local-agencies}
+local_agencies <- c(
+  "AUSTIN PARKS POLICE DEPT", #NI
+  "AUSTIN POLICE DEPT",
+  "BASTROP COUNTY SHERIFF'S OFFICE",
+  "BASTROP POLICE DEPT",
+  "BEE CAVE POLICE DEPT",
+  "BUDA POLICE DEPT",
+  "CALDWELL COUNTY SHERIFFS OFFICE",
+  "CEDAR PARK POLICE DEPT",
+  "ELGIN POLICE DEPARTMENT",
+  "FLORENCE POLICE DEPT", #NI
+  "GEORGETOWN POLICE DEPT",
+  "GRANGER POLICE DEPT", #NI
+  "HAYS CO CONSTABLE PRECINCT 4",
+  "HAYS COUNTY SHERIFFS OFFICE",
+  "HUTTO POLICE DEPT",
+  "JARRELL POLICE DEPT", #NI
+  "JONESTOWN POLICE DEPT", #NI
+  "KYLE POLICE DEPT",
+  "LAGO VISTA POLICE DEPT",
+  "LAKEWAY POLICE DEPT", #NI
+  "LEANDER POLICE DEPT",
+  "LIBERTY HILL POLICE DEPT", #NI
+  "LOCKHART POLICE DEPT",
+  "LULING POLICE DEPT",
+  "MANOR POLICE DEPT",
+  "MARTINDALE POLICE DEPT", #NI
+  "PFLUGERVILLE POLICE DEPT",
+  "ROLLINGWOOD POLICE DEPT", #NI
+  "SAN MARCOS POLICE DEPT",
+  "SMITHVILLE POLICE DEPT", #NI
+  "SUNSET VALLEY POLICE DEPT", #NI
+  "TAYLOR POLICE DEPT", #NI
+  "THRALL POLICE DEPT", #NI
+  # TEXAS STATE UNIVERSITY HI_ED
+  "TRAVIS COUNTY SHERIFFS OFFICE",
+  # TRAVIS CONSTABLE OFFICE,
+  # SOUTHWESTERN UNIVERSITY HI_ID
+  "WESTLAKE HILLS POLICE DEPT", #NI
+  "UNIV OF TEXAS SYSTEM POLICE HI_ED",
+  "WILLIAMSON COUNTY SHERIFF'S OFFICE"
+)
+
+tx_agency_totals |> 
+  filter(agency_name %in% local_agencies) 
+  
+```
+
+
+## Types of items shipped to each agency
+
+What specific controlled items did each agency get and how much were they worth? Need to group by both agency name and item name
+
+```{r}
+tx_agency_item_totals <- tx_c |> 
+  group_by(agency_name, item_name) |> 
+  summarise(
+    summed_quantity = sum(quantity),
+    summed_total_value = sum(total_value)
+  ) |> 
+  arrange(desc(summed_total_value))
+
+tx_agency_item_totals
+```
+
+
+## Filter to get items for local agencies
+
+```{r}
+tx_agency_item_totals |> 
+  filter(agency_name %in% local_agencies) |> 
+  arrange(agency_name, desc(summed_total_value))
+```
+
+
